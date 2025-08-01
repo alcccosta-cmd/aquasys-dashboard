@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch"; // Importamos o Switch
+import { Switch } from "@/components/ui/switch";
 import useMqtt from "@/hooks/useMqtt";
 import { toast } from "sonner";
 
+// Estrutura para guardar as regras de um estágio
 interface RuleSet {
   luzOn: string;
   luzOff: string;
@@ -21,32 +22,41 @@ interface RuleSet {
 export function AutomationSettings() {
   const { publishCommand } = useMqtt();
 
+  // Estados para guardar os valores do formulário
   const [vegetativoRules, setVegetativoRules] = useState<RuleSet>({ luzOn: "04:00", luzOff: "23:59", ecMin: 1000 });
   const [floracaoRules, setFloracaoRules] = useState<RuleSet>({ luzOn: "06:00", luzOff: "18:00", ecMin: 1200 });
   const [commonRules, setCommonRules] = useState({ tempMax: 28, umidadeMin: 60, phMin: 5.70, phMax: 6.39 });
   const [plantStage, setPlantStage] = useState<"vegetativo" | "floracao">("vegetativo");
-  const [isAutomationEnabled, setIsAutomationEnabled] = useState(true); // <-- NOVO ESTADO PARA O INTERRUPTOR MESTRE
+  const [isAutomationEnabled, setIsAutomationEnabled] = useState(true);
 
+  // --- LÓGICA DE ENVIO PARA O MQTT ---
   const handleSaveSettings = () => {
     const topic = 'aquasys/commands/config';
     
+    // Divide as horas e minutos para enviar como números
     const [vegOnH, vegOnM] = vegetativoRules.luzOn.split(':').map(Number);
     const [vegOffH, vegOffM] = vegetativoRules.luzOff.split(':').map(Number);
     const [floOnH, floOnM] = floracaoRules.luzOn.split(':').map(Number);
     const [floOffH, floOffM] = floracaoRules.luzOff.split(':').map(Number);
 
     const payload = {
-      automation_enabled: isAutomationEnabled ? 1 : 0, // <-- NOVO DADO ENVIADO (1 para ON, 0 para OFF)
-      plant_stage: plantStage === "vegetativo" ? 0 : 1,
+      automation_enabled: isAutomationEnabled ? 1 : 0, // 1 para ON, 0 para OFF
+      plant_stage: plantStage === "vegetativo" ? 0 : 1, // 0 para Veg, 1 para Flo
+      
+      // Regras comuns
       com_temp_max: commonRules.tempMax,
       com_umid_min: commonRules.umidadeMin,
       com_ph_min: commonRules.phMin,
       com_ph_max: commonRules.phMax,
+      
+      // Regras do estágio vegetativo
       veg_luz_on_h: vegOnH,
       veg_luz_on_m: vegOnM,
       veg_luz_off_h: vegOffH,
       veg_luz_off_m: vegOffM,
       veg_ec_min: vegetativoRules.ecMin,
+      
+      // Regras do estágio de floração
       flo_luz_on_h: floOnH,
       flo_luz_on_m: floOnM,
       flo_luz_off_h: floOffH,
@@ -60,6 +70,7 @@ export function AutomationSettings() {
     toast.success("Configurações salvas e enviadas com sucesso!");
   };
 
+  // Funções para atualizar os estados do formulário
   const handleCommonRuleChange = (e: React.ChangeEvent<HTMLInputElement>) => { setCommonRules({ ...commonRules, [e.target.name]: parseFloat(e.target.value) }); };
   const handleVegRuleChange = (e: React.ChangeEvent<HTMLInputElement>) => { setVegetativoRules({ ...vegetativoRules, [e.target.name]: e.target.name === 'ecMin' ? parseFloat(e.target.value) : e.target.value }); };
   const handleFloRuleChange = (e: React.ChangeEvent<HTMLInputElement>) => { setFloracaoRules({ ...floracaoRules, [e.target.name]: e.target.name === 'ecMin' ? parseFloat(e.target.value) : e.target.value }); };
@@ -71,11 +82,10 @@ export function AutomationSettings() {
           Configurações de Automação
         </h1>
         <p className="mt-1 text-md text-gray-600 dark:text-gray-400">
-          Defina as regras e os parâmetros que o sistema usará para operar de forma autónoma.
+          Defina as regras que o sistema usará para operar de forma autónoma.
         </p>
       </header>
       
-      {/* --- NOVO CARD PARA O CONTROLO MESTRE --- */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Controle Geral da Automação</CardTitle>
@@ -85,7 +95,7 @@ export function AutomationSettings() {
             <Label htmlFor="automation-switch" className="flex flex-col space-y-1">
               <span className="text-lg">Modo Automático</span>
               <span className="font-normal leading-snug text-muted-foreground">
-                Quando ativo, o sistema controlará os atuadores com base nas regras abaixo.
+                Quando ativo, o sistema controlará os atuadores com base nas regras.
               </span>
             </Label>
             <Switch
@@ -134,7 +144,7 @@ export function AutomationSettings() {
             <CardHeader><CardTitle>Regras para o Período Vegetativo</CardTitle></CardHeader>
             <CardContent className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2"><Label htmlFor="veg-luzOn">Ligar Iluminação (HH:MM)</Label><Input id="veg-luzOn" name="luzOn" type="time" value={vegetativoRules.luzOn} onChange={handleVegRuleChange} /></div>
-              <div className="space-y-2"><Label htmlFor="veg-luzOff">Desligar Iluminação (HH:MM)</Label><Input id="veg-luzOff" name="luzOff" type="time" value={vegetativoRules.luzOff} onChange={handleFloRuleChange} /></div>
+              <div className="space-y-2"><Label htmlFor="veg-luzOff">Desligar Iluminação (HH:MM)</Label><Input id="veg-luzOff" name="luzOff" type="time" value={floracaoRules.luzOff} onChange={handleFloRuleChange} /></div>
               <div className="space-y-2"><Label htmlFor="veg-ecMin">EC Mínimo (µS/cm)</Label><Input id="veg-ecMin" name="ecMin" type="number" value={vegetativoRules.ecMin} onChange={(e) => setVegetativoRules({...vegetativoRules, ecMin: parseFloat(e.target.value)})} /></div>
             </CardContent>
           </Card>
