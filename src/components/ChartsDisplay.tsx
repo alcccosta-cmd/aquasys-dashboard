@@ -9,7 +9,7 @@ import { useTheme } from "next-themes";
 
 export function ChartsDisplay() {
   // PASSO 2: Use o 'shallow' para otimizar
-  const dataHistory = useSensorStore((state) => state.dataHistory, shallow);
+const dataHistory = useSensorStore((state) => state.dataHistory);
   const { theme } = useTheme();
   
   const reversedHistory = [...dataHistory].reverse();

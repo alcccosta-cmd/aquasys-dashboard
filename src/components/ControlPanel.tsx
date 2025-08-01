@@ -11,8 +11,7 @@ import { shallow } from 'zustand/shallow';
 
 export function ControlPanel() {
   const { publishCommand } = useMqtt();
-  const actuatorStates = useSensorStore((state) => state.actuatorStates, shallow);
-
+const actuatorStates = useSensorStore((state) => state.actuatorStates);
   const handleSwitchChange = (atuador: string, estado: boolean) => {
     const topic = 'aquasys/commands/control';
     const message = JSON.stringify({ atuador: atuador, acao: estado ? 'ON' : 'OFF' });
