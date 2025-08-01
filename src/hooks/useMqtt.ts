@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useSensorStore } from '@/store/sensorStore';
 import client from '@/lib/mqttClient'; // Importa o nosso cliente centralizado
 
@@ -9,8 +9,11 @@ const useMqtt = () => {
   const setActuatorState = useSensorStore(state => state.setActuatorState);
 
   useEffect(() => {
-    // Se o cliente não foi inicializado (ex: URL do broker em falta), não faz nada.
+    // Se o cliente não foi inicializado, não faz nada
     if (!client) return;
+    
+    // Referência segura para o cliente
+    const mqttClient = client;
 
     const handleMessage = (topic: string, message: Buffer) => {
       try {
@@ -20,39 +23,44 @@ const useMqtt = () => {
         } else if (topic === 'aquasys/telemetry/actuators') {
           setActuatorState(data.atuador, data.estado);
         }
-      } catch (e) { console.error('Erro ao processar JSON:', e); }
+      } catch (e) { 
+        console.error('Erro ao processar JSON:', e); 
+      }
     };
     
     // Adiciona o "ouvinte" de mensagens
-    client.on('message', handleMessage);
+    mqttClient.on('message', handleMessage);
 
-    // Garante que só subscrevemos se o cliente já estiver conectado.
-    if (client.connected) {
-      client.subscribe('aquasys/telemetry/sensors');
-      client.subscribe('aquasys/telemetry/actuators');
+    // Função para realizar as inscrições
+    const subscribeTopics = () => {
+      mqttClient.subscribe('aquasys/telemetry/sensors');
+      mqttClient.subscribe('aquasys/telemetry/actuators');
+    };
+
+    // Subscreve aos tópicos conforme estado de conexão
+    if (mqttClient.connected) {
+      subscribeTopics();
     } else {
-      // Se não estiver conectado, espera pelo evento 'connect' para subscrever.
-      client.on('connect', () => {
-        client.subscribe('aquasys/telemetry/sensors');
-        client.subscribe('aquasys/telemetry/actuators');
-      });
+      const connectHandler = () => {
+        subscribeTopics();
+        mqttClient.off('connect', connectHandler);
+      };
+      mqttClient.on('connect', connectHandler);
     }
 
-    // Função de "limpeza": remove o "ouvinte" para evitar duplicatas
+    // Função de limpeza
     return () => {
-      if (client) {
-        client.off('message', handleMessage);
-      }
+      mqttClient.off('message', handleMessage);
     };
   }, [addSensorData, setActuatorState]);
 
-  const publishCommand = (topic: string, message: string): boolean => {
+  const publishCommand = useCallback((topic: string, message: string): boolean => {
     if (client && client.connected) {
       client.publish(topic, message);
       return true;
     }
     return false;
-  };
+  }, []);
 
   return { publishCommand };
 };
