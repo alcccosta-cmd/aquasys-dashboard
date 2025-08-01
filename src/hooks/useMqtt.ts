@@ -1,16 +1,15 @@
-// src/hooks/useMqtt.ts
 "use client";
 
 import { useEffect } from 'react';
 import { useSensorStore } from '@/store/sensorStore';
-import client from '@/lib/mqttClient';
+import client from '@/lib/mqttClient'; // Importa o nosso cliente centralizado
 
 const useMqtt = () => {
-  // Extrai as funções diretamente para evitar recriação de objeto
-  const addSensorData = useSensorStore((state) => state.addSensorData);
-  const setActuatorState = useSensorStore((state) => state.setActuatorState);
+  const addSensorData = useSensorStore(state => state.addSensorData);
+  const setActuatorState = useSensorStore(state => state.setActuatorState);
 
   useEffect(() => {
+    // Se o cliente não foi inicializado (ex: URL do broker em falta), não faz nada.
     if (!client) return;
 
     const handleMessage = (topic: string, message: Buffer) => {
@@ -21,46 +20,37 @@ const useMqtt = () => {
         } else if (topic === 'aquasys/telemetry/actuators') {
           setActuatorState(data.atuador, data.estado);
         }
-      } catch (e) {
-        console.error('Erro ao processar a mensagem JSON:', e);
-      }
+      } catch (e) { console.error('Erro ao processar JSON:', e); }
     };
-
-    client.on('message', handleMessage);
     
-    // Subscrições com tratamento de erro
-    const subscriptions = [
-      { topic: 'aquasys/telemetry/sensors', name: 'sensores' },
-      { topic: 'aquasys/telemetry/actuators', name: 'atuadores' }
-    ];
+    // Adiciona o "ouvinte" de mensagens
+    client.on('message', handleMessage);
 
-    subscriptions.forEach(({ topic, name }) => {
-      client.subscribe(topic, (err) => {
-        if (err) {
-          console.error(`Erro ao subscrever no tópico de ${name}:`, err);
-        } else {
-          console.log(`Inscrito no tópico de ${name}!`);
-        }
+    // Garante que só subscrevemos se o cliente já estiver conectado.
+    if (client.connected) {
+      client.subscribe('aquasys/telemetry/sensors');
+      client.subscribe('aquasys/telemetry/actuators');
+    } else {
+      // Se não estiver conectado, espera pelo evento 'connect' para subscrever.
+      client.on('connect', () => {
+        client.subscribe('aquasys/telemetry/sensors');
+        client.subscribe('aquasys/telemetry/actuators');
       });
-    });
+    }
 
-    // Limpeza completa (remove listeners e unsubscribe)
+    // Função de "limpeza": remove o "ouvinte" para evitar duplicatas
     return () => {
       if (client) {
         client.off('message', handleMessage);
-        subscriptions.forEach(({ topic }) => {
-          client.unsubscribe(topic);
-        });
       }
     };
-  }, [addSensorData, setActuatorState]); // Dependências estáveis
+  }, [addSensorData, setActuatorState]);
 
-  const publishCommand = (topic: string, message: string) => {
+  const publishCommand = (topic: string, message: string): boolean => {
     if (client && client.connected) {
       client.publish(topic, message);
       return true;
     }
-    console.error('Cliente MQTT não está conectado.');
     return false;
   };
 
